@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import argparse
-
-from scrambify.application import build_app
-from scrambify.protocol.relay import run_relay_server
+import sys
+from pathlib import Path
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,6 +34,10 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _error(message: str) -> None:
+    print(f"Error: {message}", file=sys.stderr, flush=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -43,43 +46,73 @@ def main(argv: list[str] | None = None) -> int:
         print(message, flush=True)
 
     if args.command == "relay-server":
+        from scrambify.protocol.relay import run_relay_server
         run_relay_server(host=args.host, port=args.port)
         return 0
 
-    app = build_app()
+    # Early validation: check file exists before connecting to relay
+    if args.command == "send" and args.text is None:
+        file_path = Path(args.file).resolve()
+        if not file_path.exists():
+            _error(f"File not found: {file_path}")
+            return 1
+        if not file_path.is_file():
+            _error(f"Not a regular file: {file_path}")
+            return 1
 
-    if args.command == "send":
-        if args.text is not None:
-            print(
-                app.send_text(
+    # Build app (connects to relay)
+    try:
+        from scrambify.application import build_app
+        app = build_app()
+    except Exception as exc:
+        _error(str(exc))
+        return 1
+
+    try:
+        if args.command == "send":
+            if args.text is not None:
+                result = app.send_text(
                     args.text,
                     reporter=report,
                     timeout_seconds=args.timeout,
                     poll_interval_seconds=args.poll_interval,
                 )
-            )
+            else:
+                result = app.send_file(
+                    args.file,
+                    reporter=report,
+                    timeout_seconds=args.timeout,
+                    poll_interval_seconds=args.poll_interval,
+                )
+            print(result)
             return 0
-        print(
-            app.send_file(
-                args.file,
-                reporter=report,
-                timeout_seconds=args.timeout,
-                poll_interval_seconds=args.poll_interval,
-            )
-        )
-        return 0
 
-    if args.command == "receive":
-        print(
-            app.receive(
+        if args.command == "receive":
+            result = app.receive(
                 args.code,
                 output_dir=args.output_dir,
                 reporter=report,
                 timeout_seconds=args.timeout,
                 poll_interval_seconds=args.poll_interval,
             )
-        )
-        return 0
+            print(result)
+            return 0
+
+    except TimeoutError as exc:
+        _error(f"Timed out: {exc}")
+        _error("Make sure both sender and receiver are running.")
+        return 1
+    except Exception as exc:
+        exc_type = type(exc).__name__
+        if "RelayError" in exc_type or "URLError" in type(exc).__mro__[0].__name__ or "ConnectionRefused" in str(exc):
+            _error("Cannot connect to the relay server.")
+            _error("Make sure the relay is running first:")
+            _error("  scrambify relay-server")
+            _error("")
+            _error(f"Or set SCRAMBIFY_RENDEZVOUS_URL to point to your relay.")
+        else:
+            _error(str(exc))
+        return 1
 
     parser.error(f"unsupported command: {args.command}")
     return 2
