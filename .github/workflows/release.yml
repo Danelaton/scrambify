@@ -1,0 +1,99 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            os_name: linux
+            archive_extension: tar.gz
+            executable_name: scrambify
+          - runner: macos-latest
+            os_name: darwin
+            archive_extension: tar.gz
+            executable_name: scrambify
+          - runner: windows-latest
+            os_name: windows
+            archive_extension: zip
+            executable_name: scrambify.exe
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build dependencies
+        run: python -m pip install --upgrade pip pyinstaller
+
+      - name: Build standalone executable
+        run: pyinstaller --onefile --name scrambify src/scrambify/cli.py
+
+      - name: Compute release metadata
+        id: meta
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          case "${RUNNER_ARCH}" in
+            X64) ARCH="amd64" ;;
+            ARM64) ARCH="arm64" ;;
+            *) echo "Unsupported runner arch: ${RUNNER_ARCH}" >&2; exit 1 ;;
+          esac
+          ASSET_BASENAME="scrambify_${VERSION}_${{ matrix.os_name }}_${ARCH}"
+          if [ "${{ matrix.archive_extension }}" = "zip" ]; then
+            ASSET_NAME="${ASSET_BASENAME}.zip"
+          else
+            ASSET_NAME="${ASSET_BASENAME}.tar.gz"
+          fi
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "arch=${ARCH}" >> "${GITHUB_OUTPUT}"
+          echo "asset_name=${ASSET_NAME}" >> "${GITHUB_OUTPUT}"
+
+      - name: Package release archive
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          if [ "${{ matrix.archive_extension }}" = "zip" ]; then
+            powershell -NoProfile -Command "Compress-Archive -Path 'dist/scrambify.exe' -DestinationPath 'release-assets/${{ steps.meta.outputs.asset_name }}' -Force"
+          else
+            tar -czf "release-assets/${{ steps.meta.outputs.asset_name }}" -C dist "${{ matrix.executable_name }}"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os_name }}-${{ steps.meta.outputs.arch }}
+          path: release-assets/${{ steps.meta.outputs.asset_name }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p publish-assets
+          find release-assets -type f -exec cp {} publish-assets/ \;
+
+      - name: Generate checksums
+        run: |
+          cd publish-assets
+          sha256sum * > checksums.txt
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: publish-assets/*

@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scrambify"
+version = "0.1.0"
+description = "A Python file and message transfer tool for short-code peer transfers."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "Verdent" }
+]
+dependencies = []
+keywords = ["cli", "file-transfer", "messaging", "python", "transfer"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Communications",
+  "Topic :: Internet",
+  "Topic :: Security :: Cryptography",
+  "Topic :: Utilities"
+]
+
+[project.optional-dependencies]
+build = [
+  "pyinstaller"
+]
+dev = [
+  "build>=1.2.2",
+  "pytest>=8.0"
+]
+
+[project.scripts]
+scrambify = "scrambify.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["src/scrambify/tests"]
