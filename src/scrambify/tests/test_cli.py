@@ -22,11 +22,18 @@ class CliParserTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             parser.parse_args(["send"])
 
-    def test_receive_parser_accepts_output_path(self) -> None:
+    def test_receive_parser_accepts_output_dir(self) -> None:
+        parser = build_parser()
+
+        args = parser.parse_args(["receive", "7-sunrise-meadow", "--output-dir", "downloads"])
+
+        self.assertEqual(args.command, "receive")
+        self.assertEqual(args.code, "7-sunrise-meadow")
+        self.assertEqual(args.output_dir, "downloads")
+
+    def test_receive_parser_keeps_output_alias(self) -> None:
         parser = build_parser()
 
         args = parser.parse_args(["receive", "7-sunrise-meadow", "--output", "downloads"])
 
-        self.assertEqual(args.command, "receive")
-        self.assertEqual(args.code, "7-sunrise-meadow")
-        self.assertEqual(args.output, "downloads")
+        self.assertEqual(args.output_dir, "downloads")

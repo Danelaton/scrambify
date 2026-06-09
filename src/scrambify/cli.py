@@ -19,7 +19,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     receive_parser = subparsers.add_parser("receive", help="Prepare to receive a transfer.")
     receive_parser.add_argument("code", help="Shared scrambify code.")
-    receive_parser.add_argument("--output", help="Write a received file or text message to this path.")
+    receive_parser.add_argument(
+        "--output-dir",
+        "--output",
+        dest="output_dir",
+        help="Directory to save received files or text messages to. Defaults to the current working directory.",
+    )
     receive_parser.add_argument("--timeout", type=float, default=60.0, help="Maximum seconds to wait for the peer.")
     receive_parser.add_argument("--poll-interval", type=float, default=0.25, help="Seconds between relay polls.")
 
@@ -68,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             app.receive(
                 args.code,
-                output_path=args.output,
+                output_dir=args.output_dir,
                 reporter=report,
                 timeout_seconds=args.timeout,
                 poll_interval_seconds=args.poll_interval,

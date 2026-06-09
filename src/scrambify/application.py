@@ -100,7 +100,7 @@ class ScrambifyApp:
         self,
         code: str,
         *,
-        output_path: str | None = None,
+        output_dir: str | None = None,
         reporter: Callable[[str], None] | None = None,
         timeout_seconds: float = 60.0,
         poll_interval_seconds: float = 0.25,
@@ -122,7 +122,7 @@ class ScrambifyApp:
             description="the sender's transfer offer",
         )
         if offer.kind is TransferKind.FILE:
-            destination = self._resolve_output_path(output_path, offer.name)
+            destination = self._resolve_output_path(output_dir, offer.name)
             self._report(reporter, f"Accepting file offer for {offer.name}...")
             self.sessions.respond_to_offer(session.session_id, accept=True, save_as=str(destination))
             received = self._poll(
@@ -144,8 +144,8 @@ class ScrambifyApp:
                 description="the text payload",
             )
             text = received.payload.decode("utf-8")
-            if output_path is not None:
-                destination = self._resolve_output_path(output_path, offer.name)
+            if output_dir is not None:
+                destination = self._resolve_output_path(output_dir, offer.name)
                 destination.write_text(text, encoding="utf-8", newline="")
                 return f"received text message ({offer.size} bytes) -> {destination}"
             return f"received text message ({offer.size} bytes):\n{text}"
@@ -173,13 +173,9 @@ class ScrambifyApp:
                     raise TimeoutError(f"timed out while waiting for {description}") from error
                 time.sleep(poll_interval_seconds)
 
-    def _resolve_output_path(self, output_path: str | None, offered_name: str) -> Path:
-        if output_path is None:
-            path = Path.cwd() / offered_name
-        else:
-            candidate = Path(output_path).expanduser()
-            looks_like_directory = output_path.endswith(("/", "\\"))
-            path = candidate / offered_name if looks_like_directory or (candidate.exists() and candidate.is_dir()) else candidate
+    def _resolve_output_path(self, output_dir: str | None, offered_name: str) -> Path:
+        base_dir = Path.cwd() if output_dir is None else Path(output_dir).expanduser()
+        path = base_dir / offered_name
         parent = path.parent
         if not parent.exists():
             raise ValueError(f"output directory does not exist: {parent.resolve()}")
